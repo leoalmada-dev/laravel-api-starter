@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+    types: [ opened, synchronize, reopened ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Todo el job corre dentro de TU imagen (pull desde Docker Hub)
+    container:
+      image: leoalmadadev/laravel-ci:8.3-min
+      options: --user root
+      # Si la imagen fuese PRIVADA, necesitarías credentials:
+      # credentials:
+      #   username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #   password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Composer install
+        run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Prepare .env (SQLite)
+        run: |
+          cp .env.example .env
+          mkdir -p database && touch database/database.sqlite
+          {
+            echo "APP_ENV=testing"
+            echo "DB_CONNECTION=sqlite"
+            echo "DB_DATABASE=$(pwd)/database/database.sqlite"
+          } >> .env
+          php artisan key:generate
+
+      - name: Migrate
+        run: php artisan migrate --force
+
+      - name: Run tests
+        run: php artisan test
